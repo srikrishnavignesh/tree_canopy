@@ -1,7 +1,7 @@
 import mask2former
 import tree_commons as tc
 import torch
-from sahi.predict import get_sliced_prediction
+from mask2former_sahi_predict_override import get_sliced_prediction
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -17,7 +17,7 @@ model.eval()
 def predict(img_arr):
 
     sahi_model = mask2former.Mask2FormerSahi(model=model, processor=image_processor, 
-                                mask_threshold=0.75, confidence_threshold=0.80, 
+                                mask_threshold=0.50, confidence_threshold=0.75, 
                                 device=device, image_size=tc.CROPPED_IMAGE_HEIGHT)
     
         
@@ -28,9 +28,10 @@ def predict(img_arr):
         slice_width=tc.CROPPED_IMAGE_WIDTH,         
         overlap_height_ratio=0.2,
         overlap_width_ratio=0.2, 
+        num_batch=9,
+        verbose=2,
     )
     
-
     
     annotations = []
     for ann in result.to_coco_predictions():

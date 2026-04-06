@@ -3,3 +3,5 @@ mask2former_checkpoints/
 train_images/
 evaluation_images/
 yolo11x-seg.pt
+./.vscode/
+./.idea/

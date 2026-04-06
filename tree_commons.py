@@ -17,7 +17,7 @@ TRAINING_RESULTS_OUTPUT_DIR = f'results'
 
 TRAIN_IMAGES_PATH = f'train_images'
 EVALUATION_IMAGES_PATH = f'evaluation_images'
-TRAIN_ANNOTATIONS_PATH = f'train_annotations.json'
+TRAIN_ANNOTATIONS_PATH = f'train_annotations_updated.json'
 
 YOLO_BEST_WEIGHT = f'yolo_best_weight.pt'
 

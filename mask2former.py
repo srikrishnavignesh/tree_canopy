@@ -23,11 +23,10 @@ class ImageAugmenter:
     def _noise_indivi_trees_randomly(self, img_arr, mask, p_indivi_survival=1 / 3):
         p_indivi_kill = 1 - p_indivi_survival
         instance_ids = np.unique(mask)
-        indivi_kill_no = int(p_indivi_kill * len(instance_ids))
+        indivi_tree_ids = instance_ids[instance_ids % 2 == 1]
+        indivi_kill_no = int(p_indivi_kill * len(indivi_tree_ids))
         if indivi_kill_no == 0:
             return img_arr, mask
-
-        indivi_tree_ids = instance_ids[instance_ids % 2 == 1]
 
         random.shuffle(indivi_tree_ids)
         not_survived_indivi_trees = indivi_tree_ids[:indivi_kill_no]
@@ -116,6 +115,7 @@ def get_contours(mask):
             all_contours.append(contours[0])
     return all_contours
 
+
 def get_model_input(img_arr, mask, image_id):
    
     img_arr = img_arr.astype(np.uint8)
@@ -129,7 +129,7 @@ def get_model_input(img_arr, mask, image_id):
     indiv_tree_class_id = tc.LABEL_TO_CLASS_ID[tc.CLASS_INDIVIDUAL_TREE]
     grp_tree_class_id = tc.LABEL_TO_CLASS_ID[tc.CLASS_GROUP_TREES]
 
-    mask = np.zeros((img_arr.shape[0], img_arr.shape[1]), dtype=np.uint16)
+    mask = np.zeros((img_arr.shape[0], img_arr.shape[1]), dtype=np.int32)
     mask.fill(255)
     instance_id_to_class_id = {}
     instance_id = 1
@@ -145,7 +145,7 @@ def get_model_input(img_arr, mask, image_id):
             instance_id_to_class_id[instance_id] = class_id
             instance_id += 1
             
-    return {'image': img_arr, 'instance_id_to_class_id': instance_id_to_class_id, 'mask': mask, 'image_id' : image_id}
+    return {'image': img_arr, 'instance_id_to_class_id': instance_id_to_class_id, 'mask': np.astype(mask, dtype=np.int32), 'image_id' : image_id}
 
 
 
@@ -185,6 +185,8 @@ class ImageDataCache:
             
         return sampled_files
 
+    #individual tree ids are masked with odd numbers
+    #group tree ids are masked with even numbers
     def _get_image_data_by_filename(self):
         H, W = tc.IMAGE_HEIGHT, tc.IMAGE_WIDTH
 
@@ -200,7 +202,7 @@ class ImageDataCache:
 
             indivi_tree_instance_id = 1
             grp_tree_instance_id = 2
-            mask = np.zeros((H, W), np.uint16)
+            mask = np.zeros((H, W), np.int32)
 
             annotations = image_data[tc.ANNOTATIONS_KEY]
             
@@ -303,7 +305,7 @@ def get_pretrained_model(device):
     ckpt_dir = 'facebook/mask2former-swin-tiny-coco-instance'
     cfg = Mask2FormerConfig.from_pretrained(ckpt_dir, num_labels=2, id2label=tc.CLASS_ID_TO_LABEL, label2id=tc.LABEL_TO_CLASS_ID)
     
-    cfg.backbone_config.drop_path_rate = 0 # type: ignore
+    cfg.backbone_config.drop_path_rate = 0.02 # type: ignore
     cfg.num_queries = 350
     cfg.backbone_config.attention_probs_dropout_prob = 0.025 # type: ignore
     cfg.backbone_config.hidden_dropout_prob = 0.025 # type: ignore
@@ -311,6 +313,7 @@ def get_pretrained_model(device):
     cfg.backbone_config.id2label = tc.CLASS_ID_TO_LABEL # type: ignore
     cfg.backbone_config.label2id = tc.LABEL_TO_CLASS_ID # type: ignore
     cfg.image_size = tc.CROPPED_IMAGE_HEIGHT
+    cfg.class_weight = 5.0
     return Mask2FormerForUniversalSegmentation.from_pretrained(ckpt_dir, config = cfg, ignore_mismatched_sizes=True).to(device) # type: ignore
 
 def get_image_processor():
@@ -585,7 +588,6 @@ class Mask2FormerSahi(DetectionModel):
         if self.model is None or self.processor is None:
             raise RuntimeError(f'{self.model is None} {self.processor is None}')
 
-        self.model.eval()
         with torch.no_grad():
             inputs = self.processor(images=image, return_tensors="pt")
             inputs["pixel_values"] = inputs.pixel_values.to(self.device)
@@ -603,9 +605,8 @@ class Mask2FormerSahi(DetectionModel):
         target_sizes = self._image_shapes
         
         post_processed_outputs = self.processor.post_process_instance_segmentation(
-                                outputs,threshold=self.confidence_threshold,
-                                mask_threshold=self.mask_threshold, return_binary_maps=True, 
-                                overlap_mask_area_threshold=0.50, target_sizes=target_sizes)
+                                outputs,threshold=self.confidence_threshold, mask_threshold=self.mask_threshold, 
+                                return_binary_maps=True, target_sizes=target_sizes)
         
         self._original_predictions = post_processed_outputs
 
@@ -700,6 +701,7 @@ def predict(model, image_processor, run_on_a_subset_of_eval_images):
     for indx, filename in enumerate(files):
         print(f'remaining is {len(files) - indx}')
         filepath = os.path.join(tc.EVALUATION_IMAGES_PATH, filename)
+
         result = get_sliced_prediction(
             image=filepath,
             detection_model=sahi_model,
@@ -707,6 +709,7 @@ def predict(model, image_processor, run_on_a_subset_of_eval_images):
             slice_width=tc.CROPPED_IMAGE_WIDTH,         
             overlap_height_ratio=0.2,
             overlap_width_ratio=0.2, 
+            perform_standard_pred = False
         )
         results.append(result)
     
@@ -721,17 +724,19 @@ def predict(model, image_processor, run_on_a_subset_of_eval_images):
     
 
 
-if __name__ == 'main':
-    model = get_pretrained_model('cuda')
+if __name__ == '__main__':
+    model:Mask2FormerForUniversalSegmentation = get_pretrained_model('cuda')
     image_data_cache = ImageDataCache()
-    train_dataset = DynamicDataset(100, image_data_cache)
-    validation_dataset = StaticDataset(20, image_data_cache)
+    train_dataset = DynamicDataset(1900, image_data_cache)
+    validation_dataset = StaticDataset(30, image_data_cache)
+
+    model.state_dict()['criterion.empty_weight'][1] = 5
 
     image_processor = get_image_processor()
 
-    #train(model, train_dataset,validation_dataset, image_processor)
+    train(model, train_dataset,validation_dataset, image_processor)
 
-    import matplotlib.pyplot as plt
-    plt.rcParams['figure.max_open_warning'] = 200
+    # import matplotlib.pyplot as plt
+    # plt.rcParams['figure.max_open_warning'] = 200
 
-    predict(model, image_processor, run_on_a_subset_of_eval_images= True)
+    # predict(model, image_processor, run_on_a_subset_of_eval_images= True)
