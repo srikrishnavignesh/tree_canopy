@@ -1,3 +1,12 @@
+---
+license: apache-2.0
+title: tree_canopy
+sdk: docker
+emoji: 💻
+colorFrom: blue
+colorTo: yellow
+short_description: tree segmentation
+---
 # 🌳 Tree Segmentation from Aerial Imagery (Solafune Platform)
 
 ## 📌 Overview
