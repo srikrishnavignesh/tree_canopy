@@ -42,3 +42,4 @@ def predict(img_arr):
     
     image_data = {tc.ANNOTATIONS_KEY :  annotations}
     return tc.get_overlayed_img(img_arr, image_data)
+
