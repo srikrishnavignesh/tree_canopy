@@ -1,7 +1,7 @@
 import mask2former
 import tree_commons as tc
 import torch
-from mask2former_sahi_predict_override import get_sliced_prediction
+from sahi.predict import get_sliced_prediction
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -28,8 +28,7 @@ def predict(img_arr):
         slice_width=tc.CROPPED_IMAGE_WIDTH,         
         overlap_height_ratio=0.2,
         overlap_width_ratio=0.2, 
-        num_batch=9,
-        verbose=2,
+        batch_size=9
     )
     
     

@@ -3,6 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 
+from sahi.predict import get_sliced_prediction
+
 
 MASK2FORMER_CHECKPOINT_DIR = f'mask2former_checkpoints'
 

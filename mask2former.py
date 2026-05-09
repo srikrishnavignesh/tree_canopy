@@ -145,7 +145,7 @@ def get_model_input(img_arr, mask, image_id):
             instance_id_to_class_id[instance_id] = class_id
             instance_id += 1
             
-    return {'image': img_arr, 'instance_id_to_class_id': instance_id_to_class_id, 'mask': np.astype(mask, dtype=np.int32), 'image_id' : image_id}
+    return {'image': img_arr, 'instance_id_to_class_id': instance_id_to_class_id, 'mask': np.astype(mask, np.int32), 'image_id' : image_id}
 
 
 
@@ -609,6 +609,9 @@ class Mask2FormerSahi(DetectionModel):
                                 return_binary_maps=True, target_sizes=target_sizes)
         
         self._original_predictions = post_processed_outputs
+    
+    def perform_batch_inference(self, images: list[np.ndarray]) -> None:
+        return self.perform_inference(images)
 
     def get_polygonal_predictions(self, post_processed_output) -> tuple:
        
